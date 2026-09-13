@@ -19,21 +19,31 @@ const app = express();
 // Connect to MongoDB
 connectDB();
 
-const isProduction = process.env.NODE_ENV === 'production';
-
-// Enable trust proxy for production deployments behind load balancers like Render
-if (isProduction) {
-  app.set('trust proxy', 1);
-}
+// ALWAYS enable trust proxy on cloud hosts like Render so express-session can detect HTTPS via proxy headers
+app.set('trust proxy', 1);
 
 // Security headers
-app.use(helmet());
+app.use(
+  helmet({
+    crossOriginResourcePolicy: { policy: 'cross-origin' },
+  })
+);
 
-// CORS configuration
-const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+// Helper to extract origin (e.g., https://site.netlify.app) even if URL includes paths like /login
+const parseOrigin = (urlStr) => {
+  if (!urlStr) return '';
+  try {
+    return new URL(urlStr).origin;
+  } catch (e) {
+    return urlStr.replace(/\/$/, '');
+  }
+};
+
+const configuredFrontend = parseOrigin(process.env.FRONTEND_URL);
 
 const allowedOrigins = [
-  frontendUrl,
+  configuredFrontend,
+  'https://submissiontaskvedron.netlify.app',
   'http://localhost:5173',
   'http://127.0.0.1:5173',
   'http://localhost:3000',
@@ -42,8 +52,17 @@ const allowedOrigins = [
 app.use(
   cors({
     origin: (origin, callback) => {
+      // Allow requests with no origin (like mobile apps, curl, server-to-server)
       if (!origin) return callback(null, true);
-      if (allowedOrigins.includes(origin) || allowedOrigins.includes('*')) {
+
+      const reqOrigin = parseOrigin(origin);
+      const isAllowed = allowedOrigins.some((allowed) => allowed === reqOrigin || allowed === '*');
+
+      if (isAllowed) {
+        return callback(null, true);
+      }
+      // Fail-safe: allow netlify app domains
+      if (reqOrigin.endsWith('.netlify.app')) {
         return callback(null, true);
       }
       return callback(null, true);
@@ -72,6 +91,11 @@ if (process.env.MONGODB_URI) {
     console.warn('⚠️ Session store falling back to default store:', err.message);
   }
 }
+
+const isProduction =
+  process.env.NODE_ENV === 'production' ||
+  Boolean(process.env.RENDER) ||
+  Boolean(process.env.FRONTEND_URL && !process.env.FRONTEND_URL.includes('localhost'));
 
 // Session middleware configuration
 app.use(
