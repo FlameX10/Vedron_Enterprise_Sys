@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Link, useNavigate, Navigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { LogIn, Mail, Lock, AlertCircle, Eye, EyeOff } from 'lucide-react';
+import { ShieldCheck, Mail, Lock, AlertCircle, Eye, EyeOff } from 'lucide-react';
 
 export const Login = () => {
   const [email, setEmail] = useState('');
@@ -21,8 +21,8 @@ export const Login = () => {
     );
   }
 
-  if (user) {
-    return <Navigate to={user.role === 'admin' ? '/admin' : '/dashboard'} replace />;
+  if (user && user.role === 'admin') {
+    return <Navigate to="/admin" replace />;
   }
 
   const handleSubmit = async (e) => {
@@ -30,7 +30,7 @@ export const Login = () => {
     setFormError('');
 
     if (!email || !password) {
-      setFormError('Please enter both email and password.');
+      setFormError('Please enter both admin email and password.');
       return;
     }
 
@@ -40,7 +40,7 @@ export const Login = () => {
       if (loggedInUser.role === 'admin') {
         navigate('/admin');
       } else {
-        navigate('/dashboard');
+        setFormError('Access denied. Only administrators are allowed to sign in.');
       }
     } catch (err) {
       setFormError(err.message || 'Failed to log in. Please check your credentials.');
@@ -53,11 +53,11 @@ export const Login = () => {
     <div className="auth-page-container">
       <div className="auth-card">
         <div className="auth-header">
-          <div className="auth-icon-wrapper">
-            <LogIn size={28} />
+          <div className="auth-icon-wrapper" style={{ background: 'rgba(5, 150, 105, 0.15)', color: '#10b981' }}>
+            <ShieldCheck size={28} />
           </div>
-          <h2>Account Login</h2>
-          <p>Enter your credentials to access your email submission dashboard</p>
+          <h2>Admin Portal Sign In</h2>
+          <p>Enter administrator credentials to access the data dashboard</p>
         </div>
 
         {formError && (
@@ -69,13 +69,13 @@ export const Login = () => {
 
         <form onSubmit={handleSubmit} className="auth-form">
           <div className="form-group">
-            <label htmlFor="email">Email Address</label>
+            <label htmlFor="email">Admin Email</label>
             <div className="input-with-icon">
               <Mail size={18} className="input-icon" />
               <input
                 id="email"
                 type="email"
-                placeholder="name@example.com"
+                placeholder="parasmp10@gmail.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
@@ -85,7 +85,7 @@ export const Login = () => {
           </div>
 
           <div className="form-group">
-            <label htmlFor="password">Password</label>
+            <label htmlFor="password">Admin Password</label>
             <div className="input-with-icon">
               <Lock size={18} className="input-icon" />
               <input
@@ -108,16 +108,20 @@ export const Login = () => {
             </div>
           </div>
 
-          <button type="submit" className="btn-primary btn-block" disabled={submitting}>
-            {submitting ? 'Logging in...' : 'Sign In'}
+          <button
+            type="submit"
+            className="btn-primary btn-block"
+            style={{ background: 'linear-gradient(135deg, #059669, #047857)' }}
+            disabled={submitting}
+          >
+            {submitting ? 'Signing In...' : 'Sign In as Admin'}
           </button>
         </form>
 
         <div className="auth-footer">
           <p>
-            Don't have an account yet?{' '}
-            <Link to="/register" className="auth-link">
-              Register here
+            <Link to="/" className="auth-link">
+              ← Return to Submission Portal
             </Link>
           </p>
         </div>

@@ -1,7 +1,7 @@
 import React from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { Building2, LogOut, ShieldAlert, UserCheck } from 'lucide-react';
+import { Building2, LogOut, UserCheck, ShieldAlert } from 'lucide-react';
 
 export const Navbar = () => {
   const { user, logout } = useAuth();
@@ -10,7 +10,7 @@ export const Navbar = () => {
 
   const handleLogout = async () => {
     await logout();
-    navigate('/login');
+    navigate('/');
   };
 
   return (
@@ -22,27 +22,25 @@ export const Navbar = () => {
           </div>
           <div className="brand-text">
             <span className="brand-title">Vedron</span>
-            <span className="brand-subtitle"> Submission Portal</span>
+            <span className="brand-subtitle">Submission Portal</span>
           </div>
         </Link>
 
-        {user ? (
+        {user && user.role === 'admin' ? (
           <div className="navbar-user-actions">
             <nav className="navbar-nav">
               <Link
-                to="/dashboard"
-                className={`nav-link ${location.pathname === '/dashboard' ? 'active' : ''}`}
+                to="/"
+                className={`nav-link ${location.pathname === '/' ? 'active' : ''}`}
               >
-                Dashboard
+                Submission Form
               </Link>
-              {user.role === 'admin' && (
-                <Link
-                  to="/admin"
-                  className={`nav-link admin-badge-link ${location.pathname === '/admin' ? 'active' : ''}`}
-                >
-                  <ShieldAlert size={16} /> Admin Portal
-                </Link>
-              )}
+              <Link
+                to="/admin"
+                className={`nav-link admin-badge-link ${location.pathname === '/admin' ? 'active' : ''}`}
+              >
+                <ShieldAlert size={16} /> Admin Portal
+              </Link>
             </nav>
 
             <div className="user-profile-badge">
@@ -58,16 +56,7 @@ export const Navbar = () => {
               <span>Logout</span>
             </button>
           </div>
-        ) : (
-          <div className="navbar-auth-buttons">
-            <Link to="/login" className="btn-secondary">
-              Login
-            </Link>
-            <Link to="/register" className="btn-primary">
-              Create Account
-            </Link>
-          </div>
-        )}
+        ) : null}
       </div>
     </header>
   );

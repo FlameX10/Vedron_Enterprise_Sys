@@ -1,11 +1,25 @@
 const CompanyEmail = require('../models/CompanyEmail');
 
-// @desc    Submit enterprise company email entries
+// @desc    Submit enterprise company email entries (Public or Authenticated)
 // @route   POST /api/company-emails
-// @access  Private (Applicant / Admin)
+// @access  Public
 const submitCompanyEmails = async (req, res) => {
   try {
+    const { applicantName: bodyApplicantName, applicantEmail: bodyApplicantEmail } = req.body;
     let rawEntries = req.body.entries || req.body;
+
+    // Determine applicant name and email from session (if logged in) or body inputs
+    const applicantName = (req.user && req.user.name) || (bodyApplicantName ? String(bodyApplicantName).trim() : '');
+    const applicantEmail = (req.user && req.user.email) || (bodyApplicantEmail ? String(bodyApplicantEmail).trim().toLowerCase() : '');
+
+    if (!applicantName) {
+      return res.status(400).json({ success: false, message: 'Please provide your Full Name at the top of the form.' });
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!applicantEmail || !emailRegex.test(applicantEmail)) {
+      return res.status(400).json({ success: false, message: 'Please provide a valid Applicant Email Address.' });
+    }
 
     if (!Array.isArray(rawEntries)) {
       if (typeof rawEntries === 'object' && rawEntries !== null && rawEntries.companyName) {
@@ -19,7 +33,6 @@ const submitCompanyEmails = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Please provide at least one company email entry.' });
     }
 
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     const validatedDocuments = [];
 
     for (let i = 0; i < rawEntries.length; i++) {
@@ -41,12 +54,12 @@ const submitCompanyEmails = async (req, res) => {
         });
       }
 
-      // DO NOT trust applicantName or applicantId from frontend; pull directly from req.user
       validatedDocuments.push({
         companyName,
         email,
-        applicantName: req.user.name,
-        applicantId: req.user._id,
+        applicantName,
+        applicantEmail,
+        applicantId: req.user ? req.user._id : null,
       });
     }
 
@@ -113,6 +126,7 @@ const getAdminCompanyEmails = async (req, res) => {
           { companyName: searchRegex },
           { email: searchRegex },
           { applicantName: searchRegex },
+          { applicantEmail: searchRegex },
         ],
       };
     }
@@ -126,6 +140,7 @@ const getAdminCompanyEmails = async (req, res) => {
       companyName: item.companyName,
       email: item.email,
       applicantName: item.applicantName,
+      applicantEmail: item.applicantEmail || '',
       applicantId: item.applicantId,
       createdAt: item.createdAt,
     }));

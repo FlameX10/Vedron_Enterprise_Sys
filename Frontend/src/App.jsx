@@ -3,9 +3,8 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { AuthProvider } from './context/AuthContext';
 import { Navbar } from './components/Navbar';
 import { ProtectedRoute } from './components/ProtectedRoute';
+import { PublicSubmission } from './pages/PublicSubmission';
 import { Login } from './pages/Login';
-import { Register } from './pages/Register';
-import { ApplicantDashboard } from './pages/ApplicantDashboard';
 import { AdminDashboard } from './pages/AdminDashboard';
 import './App.css';
 
@@ -17,19 +16,13 @@ function App() {
           <Navbar />
           <main className="main-content">
             <Routes>
-              <Route path="/" element={<Navigate to="/login" replace />} />
+              {/* Public Submission Form Route for Applicants (No login required) */}
+              <Route path="/" element={<PublicSubmission />} />
+              
+              {/* Separate Dedicated Admin Login Route */}
               <Route path="/login" element={<Login />} />
-              <Route path="/register" element={<Register />} />
               
-              <Route
-                path="/dashboard"
-                element={
-                  <ProtectedRoute>
-                    <ApplicantDashboard />
-                  </ProtectedRoute>
-                }
-              />
-              
+              {/* Admin Dashboard Protected Route */}
               <Route
                 path="/admin"
                 element={
@@ -39,7 +32,7 @@ function App() {
                 }
               />
 
-              <Route path="*" element={<Navigate to="/login" replace />} />
+              <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </main>
         </div>

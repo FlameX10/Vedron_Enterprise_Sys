@@ -21,10 +21,15 @@ const companyEmailSchema = new mongoose.Schema(
       trim: true,
       index: true,
     },
+    applicantEmail: {
+      type: String,
+      trim: true,
+      lowercase: true,
+    },
     applicantId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',
-      required: true,
+      required: false,
       index: true,
     },
   },
