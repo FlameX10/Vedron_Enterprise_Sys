@@ -1,4 +1,4 @@
-# Enterprise Company Email Collector MVP
+# Enterprise Company Email Collector submission mvp
 
 A simple, secure, and production-ready web application portal designed to systemize the collection of authentic enterprise company email addresses from Internshala/Naukri applicants.
 
