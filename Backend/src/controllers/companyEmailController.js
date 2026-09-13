@@ -111,12 +111,17 @@ const getProfile = async (req, res) => {
   });
 };
 
-// @desc    Get all submitted company emails (Admin view with search)
-// @route   GET /api/admin/company-emails
+// @desc    Get all submitted company emails (Admin view with search + pagination)
+// @route   GET /api/admin/company-emails?page=1&limit=50&search=
 // @access  Private (Admin only)
 const getAdminCompanyEmails = async (req, res) => {
   try {
     const { search } = req.query;
+
+    // Pagination params — default: page 1, 50 per page
+    const page  = Math.max(1, parseInt(req.query.page,  10) || 1);
+    const limit = Math.min(200, Math.max(1, parseInt(req.query.limit, 10) || 50));
+    const skip  = (page - 1) * limit;
 
     let query = {};
     if (search && search.trim()) {
@@ -131,11 +136,17 @@ const getAdminCompanyEmails = async (req, res) => {
       };
     }
 
-    const rawEmails = await CompanyEmail.find(query).sort({ createdAt: -1 });
+    // Run count + paginated fetch in parallel for speed
+    const [totalCount, pageEmails] = await Promise.all([
+      CompanyEmail.countDocuments(query),
+      CompanyEmail.find(query).sort({ createdAt: -1 }).skip(skip).limit(limit),
+    ]);
 
-    // Format with sequential ID 1, 2, 3... for requested admin table format
-    const formattedEmails = rawEmails.map((item, index) => ({
-      id: index + 1,
+    const totalPages = Math.ceil(totalCount / limit);
+
+    // Sequential IDs continue across pages (e.g. page 2 starts at 51)
+    const formattedEmails = pageEmails.map((item, index) => ({
+      id: skip + index + 1,
       mongoId: item._id,
       companyName: item.companyName,
       email: item.email,
@@ -148,6 +159,9 @@ const getAdminCompanyEmails = async (req, res) => {
     res.status(200).json({
       success: true,
       count: formattedEmails.length,
+      totalCount,
+      totalPages,
+      currentPage: page,
       data: formattedEmails,
     });
   } catch (error) {

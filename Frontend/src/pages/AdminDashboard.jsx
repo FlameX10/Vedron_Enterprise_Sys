@@ -1,24 +1,56 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { apiFetch } from '../api/client';
-import { Search, LogOut, ShieldCheck, RefreshCw, AlertCircle, Mail, Download } from 'lucide-react';
+import {
+  Search, LogOut, ShieldCheck, RefreshCw, AlertCircle, Mail,
+  Download, ChevronLeft, ChevronRight, ChevronDown, FileSpreadsheet, Layers
+} from 'lucide-react';
 import * as XLSX from 'xlsx';
+
+const LIMIT = 50; // entries per page
 
 export const AdminDashboard = () => {
   const { logout } = useAuth();
-  const [emails, setEmails] = useState([]);
+  const [emails, setEmails]         = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  const [loading, setLoading]       = useState(true);
+  const [error, setError]           = useState('');
 
-  const fetchAdminData = async (query = '') => {
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages]   = useState(1);
+  const [totalCount, setTotalCount]   = useState(0);
+
+  // Export dropdown & loading state
+  const [showExportMenu, setShowExportMenu] = useState(false);
+  const [exportingAll, setExportingAll]     = useState(false);
+  const dropdownRef                         = useRef(null);
+
+  const fetchAdminData = useCallback(async (query = '', page = 1) => {
     try {
       setLoading(true);
       setError('');
-      const endpoint = query ? `/api/admin/company-emails?search=${encodeURIComponent(query)}` : '/api/admin/company-emails';
-      const res = await apiFetch(endpoint);
+
+      const params = new URLSearchParams({ page, limit: LIMIT });
+      if (query) params.set('search', query);
+
+      const res = await apiFetch(`/api/admin/company-emails?${params.toString()}`);
+
       if (res.success && res.data) {
-        setEmails(res.data);
+        const count = res.totalCount ?? res.data.length;
+        const pages = res.totalPages ?? Math.max(1, Math.ceil(count / LIMIT));
+
+        // If backend sent full un-paginated array, slice it locally for this page
+        let displayData = res.data;
+        if (!res.totalPages && res.data.length > LIMIT) {
+          const start = (page - 1) * LIMIT;
+          displayData = res.data.slice(start, start + LIMIT);
+        }
+
+        setEmails(displayData);
+        setCurrentPage(res.currentPage || page);
+        setTotalPages(pages);
+        setTotalCount(count);
       } else {
         setError(res.message || 'Failed to fetch company emails.');
       }
@@ -27,52 +59,99 @@ export const AdminDashboard = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
+  // Debounce search — reset to page 1 on new search
   useEffect(() => {
-    const delayDebounceFn = setTimeout(() => {
-      fetchAdminData(searchTerm);
+    const timer = setTimeout(() => {
+      setCurrentPage(1);
+      fetchAdminData(searchTerm, 1);
     }, 300);
+    return () => clearTimeout(timer);
+  }, [searchTerm, fetchAdminData]);
 
-    return () => clearTimeout(delayDebounceFn);
-  }, [searchTerm]);
+  // Close export dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setShowExportMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
-  const handleRefresh = () => {
-    fetchAdminData(searchTerm);
+  const handleRefresh = () => fetchAdminData(searchTerm, currentPage);
+
+  const goToPage = (page) => {
+    if (page < 1 || page > totalPages) return;
+    setCurrentPage(page);
+    fetchAdminData(searchTerm, page);
   };
 
-  const handleExportExcel = () => {
-    if (emails.length === 0) return;
+  // Reusable Excel exporter function
+  const triggerExcelDownload = (dataList, filenameSuffix = '') => {
+    if (!dataList || dataList.length === 0) return;
 
-    // Create formatted data structure matching the exact admin table columns
-    const exportData = emails.map((item) => ({
-      'ID': item.id,
-      'Company Name': item.companyName,
-      'Email': item.email,
+    const exportData = dataList.map((item, idx) => ({
+      'ID':             item.id || (idx + 1),
+      'Company Name':   item.companyName,
+      'Email':          item.email,
       'Applicant Name': item.applicantName,
-      'Submitted Date': item.createdAt ? new Date(item.createdAt).toLocaleDateString() : 'N/A'
+      'Applicant Email': item.applicantEmail || 'N/A',
+      'Submitted Date': item.createdAt ? new Date(item.createdAt).toLocaleDateString() : 'N/A',
     }));
 
-    // Create worksheet and workbook
     const worksheet = XLSX.utils.json_to_sheet(exportData);
-    
-    // Auto-fit column widths for clear presentation in Excel
-    const columnWidths = [
-      { wch: 8 },  // ID
-      { wch: 25 }, // Company Name
-      { wch: 35 }, // Email
-      { wch: 25 }, // Applicant Name
-      { wch: 15 }, // Date
+    worksheet['!cols'] = [
+      { wch: 8 },   // ID
+      { wch: 25 },  // Company Name
+      { wch: 35 },  // Email
+      { wch: 25 },  // Applicant Name
+      { wch: 30 },  // Applicant Email
+      { wch: 15 },  // Date
     ];
-    worksheet['!cols'] = columnWidths;
 
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, 'Company Emails');
 
-    // Download the .xlsx file
     const dateStr = new Date().toISOString().slice(0, 10);
-    XLSX.writeFile(workbook, `Enterprise_Company_Emails_${dateStr}.xlsx`);
+    const filename = filenameSuffix
+      ? `Enterprise_Company_Emails_${filenameSuffix}_${dateStr}.xlsx`
+      : `Enterprise_Company_Emails_${dateStr}.xlsx`;
+
+    XLSX.writeFile(workbook, filename);
   };
+
+  // Option 1: Export only current visible page
+  const handleExportPage = () => {
+    setShowExportMenu(false);
+    triggerExcelDownload(emails, `Page_${currentPage}`);
+  };
+
+  // Option 2: Export ALL leads from database
+  const handleExportAll = async () => {
+    setShowExportMenu(false);
+    try {
+      setExportingAll(true);
+      const params = new URLSearchParams({ page: 1, limit: 100000 });
+      if (searchTerm) params.set('search', searchTerm);
+
+      const res = await apiFetch(`/api/admin/company-emails?${params.toString()}`);
+      if (res.success && res.data) {
+        triggerExcelDownload(res.data, 'ALL_LEADS');
+      } else {
+        setError(res.message || 'Failed to fetch all leads for export.');
+      }
+    } catch (err) {
+      setError(err.message || 'Error fetching all leads.');
+    } finally {
+      setExportingAll(false);
+    }
+  };
+
+  const rangeStart = totalCount === 0 ? 0 : (currentPage - 1) * LIMIT + 1;
+  const rangeEnd   = Math.min(currentPage * LIMIT, totalCount);
 
   return (
     <div className="admin-container">
@@ -109,15 +188,48 @@ export const AdminDashboard = () => {
           </div>
 
           <div className="toolbar-actions">
-            <button
-              onClick={handleExportExcel}
-              className="btn-export-excel"
-              disabled={emails.length === 0}
-              title="Download table data in Excel format (.xlsx)"
-            >
-              <Download size={16} />
-              <span>Export to Excel</span>
-            </button>
+            {/* Export Dropdown Menu */}
+            <div className="export-dropdown-wrapper" ref={dropdownRef}>
+              <button
+                onClick={() => setShowExportMenu(!showExportMenu)}
+                className="btn-export-excel"
+                disabled={totalCount === 0 || exportingAll}
+                title="Export options for Excel (.xlsx)"
+              >
+                {exportingAll ? (
+                  <>
+                    <RefreshCw size={16} className="animate-spin" />
+                    <span>Exporting All...</span>
+                  </>
+                ) : (
+                  <>
+                    <Download size={16} />
+                    <span>Export Excel</span>
+                    <ChevronDown size={14} className={`dropdown-arrow ${showExportMenu ? 'open' : ''}`} />
+                  </>
+                )}
+              </button>
+
+              {showExportMenu && (
+                <div className="export-dropdown-menu">
+                  <button onClick={handleExportPage} className="export-menu-item">
+                    <FileSpreadsheet size={16} className="menu-icon" />
+                    <div className="menu-text">
+                      <span className="menu-title">Export Current Page</span>
+                      <span className="menu-sub">Only visible entries ({emails.length})</span>
+                    </div>
+                  </button>
+
+                  <button onClick={handleExportAll} className="export-menu-item accent">
+                    <Layers size={16} className="menu-icon" />
+                    <div className="menu-text">
+                      <span className="menu-title">Export All Leads</span>
+                      <span className="menu-sub">Download entire DB ({totalCount} entries)</span>
+                    </div>
+                  </button>
+                </div>
+              )}
+            </div>
 
             <button onClick={handleRefresh} className="btn-refresh" title="Refresh data">
               <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
@@ -179,8 +291,41 @@ export const AdminDashboard = () => {
           </table>
         </div>
 
+        {/* Footer: count + pagination */}
         <div className="admin-table-footer">
-          <span>Showing <strong>{emails.length}</strong> submitted entry record(s)</span>
+          <span className="footer-count">
+            {totalCount === 0
+              ? 'No entries'
+              : `Showing ${rangeStart}–${rangeEnd} of ${totalCount} entries`}
+          </span>
+
+          {totalPages > 1 && (
+            <div className="pagination-controls">
+              <button
+                className="page-btn"
+                onClick={() => goToPage(currentPage - 1)}
+                disabled={currentPage <= 1 || loading}
+                title="Previous page"
+              >
+                <ChevronLeft size={16} />
+                <span>Prev</span>
+              </button>
+
+              <span className="page-indicator">
+                Page <strong>{currentPage}</strong> of <strong>{totalPages}</strong>
+              </span>
+
+              <button
+                className="page-btn"
+                onClick={() => goToPage(currentPage + 1)}
+                disabled={currentPage >= totalPages || loading}
+                title="Next page"
+              >
+                <span>Next</span>
+                <ChevronRight size={16} />
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </div>
