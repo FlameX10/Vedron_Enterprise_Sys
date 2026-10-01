@@ -120,7 +120,7 @@ const getAdminCompanyEmails = async (req, res) => {
 
     // Pagination params — default: page 1, 50 per page
     const page  = Math.max(1, parseInt(req.query.page,  10) || 1);
-    const limit = Math.min(200, Math.max(1, parseInt(req.query.limit, 10) || 50));
+    const limit = Math.min(10000, Math.max(1, parseInt(req.query.limit, 10) || 50));
     const skip  = (page - 1) * limit;
 
     let query = {};
